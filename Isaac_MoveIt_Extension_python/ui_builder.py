@@ -23,7 +23,7 @@ from omni.isaac.core.utils.stage import (
     get_current_stage,
 )
 from omni.isaac.core.world import World
-from omni.isaac.ui.element_wrappers import CollapsableFrame, StateButton
+from omni.isaac.ui.element_wrappers import CollapsableFrame, StateButton, Button
 from omni.isaac.ui.element_wrappers.core_connectors import LoadButton, ResetButton
 from omni.isaac.ui.ui_utils import get_style
 from omni.usd import StageEventType
@@ -141,6 +141,18 @@ class UIBuilder:
                 self._scenario_state_btn.enabled = False
                 self.wrapped_ui_elements.append(self._scenario_state_btn)
 
+        buttons_frame = CollapsableFrame("Buttons Frame", collapsed=False)
+
+        with buttons_frame:
+            with ui.VStack(style=get_style(), spacing=5, height=0):
+                button = Button(
+                    "Grasp",
+                    "Grasp",
+                    tooltip="Click This Button to close suction gripper",
+                    on_click_fn=self._on_grasp_button_clicked_fn,
+                )
+                self.wrapped_ui_elements.append(button)
+
     ######################################################################################
     # Functions Below This Point Support The Provided Example And Can Be Deleted/Replaced
     ######################################################################################
@@ -254,6 +266,10 @@ class UIBuilder:
         this example prettier, but if curious, the user should observe what happens when this line is removed.
         """
         self._timeline.pause()
+
+    def _on_grasp_button_clicked_fn(self):
+        status = "The Grasp Button was Clicked!"
+        self._scenario.close_gripper()
 
     def _reset_extension(self):
         """This is called when the user opens a new stage from self.on_stage_event().

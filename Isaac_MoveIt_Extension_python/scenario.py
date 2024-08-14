@@ -26,6 +26,12 @@ from omni.isaac.core.utils.types import ArticulationAction
 import omni.graph.core as og
 from omni.isaac.core_nodes.scripts.utils import set_target_prims
 
+from omni.isaac.dynamic_control import _dynamic_control as dc
+from omni.isaac.surface_gripper._surface_gripper import (
+    Surface_Gripper_Properties,
+    Surface_Gripper,
+)
+
 
 class ExampleScenario(ScenarioTemplate):
     def __init__(self):
@@ -34,6 +40,8 @@ class ExampleScenario(ScenarioTemplate):
 
         self.action_graph = None
         self._setup_ros_actiongraph()
+        self.init_gripper()
+        self.surface_gripper.open()
 
     def setup_scenario(self, articulation):
         self._running_scenario = True
@@ -48,7 +56,31 @@ class ExampleScenario(ScenarioTemplate):
         if not self._running_scenario:
             return
 
-        self._time += step
+        self.surface_gripper.update()
+
+    def close_gripper(self):
+        if not self._running_scenario:
+            return
+        self.surface_gripper.close()
+
+    def init_gripper(self):
+        self._dc = dc.acquire_dynamic_control_interface()
+        self.sgp = Surface_Gripper_Properties()
+        self.sgp.d6JointPath = "/World/panda/panda_tip/d6FixedJoint"
+        self.sgp.parentPath = "/World/panda/panda_tip"
+        self.sgp.offset = dc.Transform()  # Offset the transform to the base of the Cone
+        self.sgp.offset.p.x = -0.001
+        self.sgp.offset.r = [1.0, 0, 0, 0]
+        self.sgp.gripThreshold = 0.02
+        self.sgp.forceLimit = 1.0e3
+        self.sgp.torqueLimit = 1.0e3
+        self.sgp.bendAngle = 7.5
+        self.sgp.stiffness = 1.0e4
+        self.sgp.damping = 1.0e3
+        self.sgp.retryClose = True
+
+        self.surface_gripper = Surface_Gripper(self._dc)
+        self.surface_gripper.initialize(self.sgp)
 
     def _setup_ros_actiongraph(self):
         print(f"Create ActionGraph /franka_graph")
