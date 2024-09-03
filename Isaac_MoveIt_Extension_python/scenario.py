@@ -1,13 +1,3 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
-#
-# NVIDIA CORPORATION and its licensors retain all intellectual property
-# and proprietary rights in and to this software, related documentation
-# and any modifications thereto. Any use, reproduction, disclosure or
-# distribution of this software and related documentation without an express
-# license agreement from NVIDIA CORPORATION is strictly prohibited.
-#
-
-
 class ScenarioTemplate:
     def __init__(self):
         pass
@@ -22,29 +12,55 @@ class ScenarioTemplate:
         pass
 
 
-from omni.isaac.core.utils.types import ArticulationAction
 import omni.graph.core as og
 from omni.isaac.core_nodes.scripts.utils import set_target_prims
 
-from omni.isaac.dynamic_control import _dynamic_control as dc
+import omni.physics.tensors as physics
 from omni.isaac.surface_gripper._surface_gripper import (
     Surface_Gripper_Properties,
     Surface_Gripper,
 )
 
+from omni.isaac.sensor import Camera
+from omni.isaac.core import World
+from omni.isaac.core.prims import XFormPrim
+
+from omni.isaac.core import utils
+
+utils.extensions.enable_extension("omni.isaac.ros2_bridge")
+import rclpy
+from .ros_interface import ROSInterface
+
 
 class ExampleScenario(ScenarioTemplate):
     def __init__(self):
+
+        if not rclpy.ok():
+            rclpy.init()
+
         self._running_scenario = False
         self._time = 0.0  # s
+
+        self.ros_interface = ROSInterface()
 
         self.action_graph = None
         self._setup_ros_actiongraph()
         self.init_gripper()
         self.surface_gripper.open()
 
-    def setup_scenario(self, articulation):
+        self.cube_prim_pose = None
+
+    def setup_scenario(self):
         self._running_scenario = True
+
+        self.camera_prim_path = "/World/Group/Camera"
+        self.scene = World.instance().scene
+
+        self.camera = Camera(prim_path=self.camera_prim_path)
+        self.camera.initialize()
+        self.camera.add_instance_segmentation_to_frame()
+        frame = self.camera.get_current_frame()
+        print(f"Camera current frame: {frame}")
 
     def teardown_scenario(self):
         self._time = 0.0
@@ -58,17 +74,63 @@ class ExampleScenario(ScenarioTemplate):
 
         self.surface_gripper.update()
 
-    def close_gripper(self):
+        frame = self.camera.get_current_frame()
+        if "instance_segmentation" in frame:
+            instance_segmentation = frame["instance_segmentation"]
+            cubes = {}
+            if instance_segmentation:
+                id_to_labels = instance_segmentation["info"]["idToLabels"]
+                for id, semantic_label in instance_segmentation["info"][
+                    "idToSemantics"
+                ].items():
+                    if "cube" in semantic_label["class"]:
+                        cubes[id_to_labels[id]] = int(id)
+
+                for cube_key in cubes:
+                    prim_path = cube_key
+                    if not self.scene.object_exists(prim_path):
+                        self.scene.add(XFormPrim(prim_path=prim_path, name=prim_path))
+                    cube_prim_object = self.scene.get_object(prim_path)
+                    self.cube_prim_pose = cube_prim_object.get_world_pose()
+                    # print(f"cube {cubes[cube_key]} world transform: {cube_prim_pose[0]}")
+
+    def move_to_conveyor(self):
+        if not self._running_scenario:
+            return
+
+        cube_dropoff_position = (
+            XFormPrim(prim_path="/World/cube_dropoff_position")
+            .get_world_pose()[0]
+            .tolist()
+        )
+        print(f"cube dropoff position: {cube_dropoff_position}")
+        if cube_dropoff_position:
+            print(f"cube dropoff position: {cube_dropoff_position}")
+            self.ros_interface.send_goal(cube_dropoff_position)
+
+    def move_to_cube(self):
+        if not self._running_scenario:
+            return
+
+        if self.cube_prim_pose:
+            print(f"cube prim pose: {self.cube_prim_pose[0]}")
+            self.ros_interface.send_goal(self.cube_prim_pose[0])
+
+    def grasp(self):
         if not self._running_scenario:
             return
         self.surface_gripper.close()
 
+    def open_gripper(self):
+        if not self._running_scenario:
+            return
+        self.surface_gripper.open()
+
     def init_gripper(self):
-        self._dc = dc.acquire_dynamic_control_interface()
         self.sgp = Surface_Gripper_Properties()
         self.sgp.d6JointPath = "/World/panda/panda_tip/d6FixedJoint"
         self.sgp.parentPath = "/World/panda/panda_tip"
-        self.sgp.offset = dc.Transform()  # Offset the transform to the base of the Cone
+        self.sgp.offset = physics.Transform()
         self.sgp.offset.p.x = -0.001
         self.sgp.offset.r = [1.0, 0, 0, 0]
         self.sgp.gripThreshold = 0.02
@@ -79,7 +141,7 @@ class ExampleScenario(ScenarioTemplate):
         self.sgp.damping = 1.0e3
         self.sgp.retryClose = True
 
-        self.surface_gripper = Surface_Gripper(self._dc)
+        self.surface_gripper = Surface_Gripper()
         self.surface_gripper.initialize(self.sgp)
 
     def _setup_ros_actiongraph(self):
@@ -193,7 +255,7 @@ class ExampleScenario(ScenarioTemplate):
             set_target_prims(
                 primPath="/franka_graph/PublishTF",
                 inputName="inputs:parentPrim",
-                targetPrimPaths=["/World/panda"],
+                targetPrimPaths=["/World"],
             )
             set_target_prims(
                 primPath="/franka_graph/PublishTF",

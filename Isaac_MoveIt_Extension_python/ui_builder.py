@@ -146,10 +146,34 @@ class UIBuilder:
         with buttons_frame:
             with ui.VStack(style=get_style(), spacing=5, height=0):
                 button = Button(
+                    "Move to Cube",
+                    "Move to Cube",
+                    tooltip="Click This Button to move to Cube",
+                    on_click_fn=self._on_move_to_cube_button_clicked_fn,
+                )
+                self.wrapped_ui_elements.append(button)
+
+                button = Button(
                     "Grasp",
                     "Grasp",
                     tooltip="Click This Button to close suction gripper",
                     on_click_fn=self._on_grasp_button_clicked_fn,
+                )
+                self.wrapped_ui_elements.append(button)
+
+                button = Button(
+                    "Move to Conveyor",
+                    "Move to Conveyor",
+                    tooltip="Click This Button to move to Conveyor",
+                    on_click_fn=self._on_move_to_conveyor_button_clicked_fn,
+                )
+                self.wrapped_ui_elements.append(button)
+
+                button = Button(
+                    "Release",
+                    "Release",
+                    tooltip="Click This Button to open suction gripper",
+                    on_click_fn=self._on_release_button_clicked_fn,
                 )
                 self.wrapped_ui_elements.append(button)
 
@@ -190,10 +214,13 @@ class UIBuilder:
         self._add_light_to_stage()
 
         dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-        add_reference_to_stage(os.path.join(dir_path, "scene", "scene.usda"), "/World")
+        add_reference_to_stage(
+            os.path.join(dir_path, "scene", "conveyor-scene.usd"),
+            "/World",
+        )
 
-        robot_prim_path = "/World/panda"
-        self._articulation = Articulation(robot_prim_path)
+        # robot_prim_path = "/World/panda"
+        # self._articulation = Articulation(robot_prim_path)
 
     def _setup_scenario(self):
         """
@@ -213,7 +240,7 @@ class UIBuilder:
 
     def _reset_scenario(self):
         self._scenario.teardown_scenario()
-        self._scenario.setup_scenario(self._articulation)
+        self._scenario.setup_scenario()
 
     def _on_post_reset_btn(self):
         """
@@ -267,9 +294,17 @@ class UIBuilder:
         """
         self._timeline.pause()
 
+    def _on_move_to_conveyor_button_clicked_fn(self):
+        self._scenario.move_to_conveyor()
+
+    def _on_move_to_cube_button_clicked_fn(self):
+        self._scenario.move_to_cube()
+
     def _on_grasp_button_clicked_fn(self):
-        status = "The Grasp Button was Clicked!"
-        self._scenario.close_gripper()
+        self._scenario.grasp()
+
+    def _on_release_button_clicked_fn(self):
+        self._scenario.open_gripper()
 
     def _reset_extension(self):
         """This is called when the user opens a new stage from self.on_stage_event().
