@@ -9,7 +9,7 @@ class ROSInterface(Node):
 
     def __init__(self):
         super().__init__("isaac_ros_interface")
-        self._action_client = ActionClient(self, MoveToPose, "/execute_trajectory_new")
+        self._action_client = ActionClient(self, MoveToPose, "/move_to_pose")
 
     def send_goal(self, goal_position):
         self._action_client.wait_for_server()
